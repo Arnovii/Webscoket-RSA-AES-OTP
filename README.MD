@@ -7,7 +7,7 @@ py -m venv venv
 
 **2. Instalar dependencias**
 
-**pip install -r requirements.txt
+pip install -r requirements.txt
 
 **3. Ejecutar servidor (debe estar dentro de la carpeta server)**
 
