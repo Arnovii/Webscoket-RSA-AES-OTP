@@ -1,0 +1,757 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>WS RSA+AES+OTP — Envío y validación por servidor</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #363636 0%, #000000 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      color: #333;
+    }
+    
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+    
+    h2 { 
+      color: #1a1a2e;
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #6b6b6b 0%, #000000 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .status-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .status-label {
+      font-weight: 600;
+      color: #666;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .status-badge {
+      padding: 8px 20px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status-badge::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    
+    .status-connected { 
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+    
+    .status-connected::before {
+      background: white;
+    }
+    
+    .status-disconnected { 
+      background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+      color: white;
+    }
+    
+    .status-disconnected::before {
+      background: white;
+      animation: none;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .otp-section {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 30px;
+      border-radius: 20px;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 40px;
+    }
+    
+    .otp-display-area {
+      display: flex;
+      align-items: center;
+      gap: 30px;
+    }
+    
+    .otp-container {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .otp-circle {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+    
+    .otp-circle circle {
+      fill: none;
+      stroke-width: 6;
+    }
+    
+    .otp-bg { 
+      stroke: rgba(255, 255, 255, 0.3);
+    }
+    
+    .otp-progress { 
+      stroke: #667eea;
+      transition: stroke-dashoffset 1s linear, stroke 0.3s ease;
+      filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.5));
+    }
+    
+    .otp-number {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: 4px;
+    }
+    
+    .otp-seconds {
+      position: absolute;
+      bottom: -30px;
+      font-size: 14px;
+      color: #666;
+      font-weight: 600;
+      width: 100%;
+      text-align: center;
+    }
+    
+    .otp-input-area {
+      flex: 1;
+    }
+    
+    .otp-label {
+      display: block;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+    
+    .otp-input-wrapper {
+      position: relative;
+    }
+    
+    input[type="text"] {
+      width: 100%;
+      padding: 14px 20px;
+      border: 2px solid rgba(102, 126, 234, 0.2);
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-align: center;
+      transition: all 0.3s ease;
+      background: white;
+      color: #1a1a2e;
+    }
+    
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+      transform: translateY(-2px);
+    }
+    
+    #manual_otp {
+      max-width: 220px;
+    }
+    
+    .otp-hint {
+      margin-top: 8px;
+      color: #666;
+      font-size: 13px;
+    }
+    
+    .message-section {
+      background: white;
+      padding: 25px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      border: 2px solid #f0f0f0;
+    }
+    
+    .input-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+    
+    #msg_input {
+      flex: 1;
+    }
+    
+    button {
+      padding: 14px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+    
+    button:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    #send_btn {
+      background: linear-gradient(135deg, #000000 0%, #3f3f3f 100%);
+      color: white;
+    }
+    
+    #send_with_otp_btn {
+      background: linear-gradient(135deg, #3f3f3f 0%, #000000 100%);
+      color: white;
+    }
+    
+    #req_secret_btn {
+      background: linear-gradient(135deg, #3f3f3f 0%, #000000 100%);
+      color: white;
+      width: 100%;
+    }
+    
+    .log-section {
+      margin-top: 30px;
+    }
+    
+    .log-header {
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 15px;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .log-header::before {
+      content: '📋';
+      font-size: 20px;
+    }
+    
+    #log {
+      height: 350px;
+      overflow: auto;
+      line-height: 1.6;
+      padding: 20px;
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      background: #1a1a2e;
+      border-radius: 16px;
+      color: #e0e0e0;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+    
+    #log::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    #log::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+    }
+    
+    #log::-webkit-scrollbar-thumb {
+      background: rgba(102, 126, 234, 0.5);
+      border-radius: 10px;
+    }
+    
+    #log::-webkit-scrollbar-thumb:hover {
+      background: rgba(102, 126, 234, 0.7);
+    }
+    
+    #log p {
+      margin: 4px 0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: background 0.2s ease;
+    }
+    
+    #log p:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>🔐 WebSocket — RSA + AES-128 + TOTP</h2>
+      <div class="status-container">
+        <span class="status-label">Estado:</span>
+        <span id="status" class="status-badge status-disconnected">disconnected</span>
+      </div>
+    </div>
+
+    <div class="otp-section">
+      <div class="otp-display-area">
+        <div>
+          <div style="font-weight: 700; color: #1a1a2e; margin-bottom: 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Código OTP Actual</div>
+          <div class="otp-container">
+            <svg class="otp-circle">
+              <circle class="otp-bg" cx="70" cy="70" r="64" />
+              <circle class="otp-progress" cx="70" cy="70" r="64" />
+            </svg>
+            <div class="otp-number" id="otp_display">—</div>
+            <div class="otp-seconds" id="otp_seconds"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="otp-input-area">
+        <label class="otp-label">Ingresa el código OTP:</label>
+        <div class="otp-input-wrapper">
+          <input id="manual_otp" type="text" placeholder="123456" maxlength="6" />
+        </div>
+        <div class="otp-hint">⏱️ El código cambia cada 30 segundos</div>
+      </div>
+    </div>
+
+    <div class="message-section">
+      <div class="input-group">
+        <input id="msg_input" type="text" placeholder="Escribe tu mensaje aquí..." />
+        <button id="send_btn">Enviar Normal</button>
+        <button id="send_with_otp_btn">🔒 Enviar con OTP</button>
+      </div>
+      
+      <button id="req_secret_btn">🔒 Solicitar Información Privada (requiere OTP)</button>
+    </div>
+
+    <div class="log-section">
+      <div style="font-weight:700;margin-bottom:8px">Registro de actividad</div>
+      <pre id="log"></pre>
+    </div>
+  </div>
+
+<script>
+/*
+===============================================================================
+CLIENT (browser JS) - Documentado con 3 grandes bloques
+===============================================================================
+
+Resumen del handshake (protocolo con el server.py):
+  1) Cliente se conecta a ws://... y recibe {'type': 'rsa_pub', 'pem': ...}
+  2) Cliente genera AES key (AES-GCM 128 bits), exporta su raw bytes y cifra
+     esa AES key con la public key RSA del servidor (RSA-OAEP SHA-256).
+     Envía: {'type':'enc_aes', 'data': base64(enc_aes)}
+  3) El servidor descifra la AES key y responde con {'type':'enc_otp', 'data': base64(aes(enc(otp_secret)))}
+     donde enc_otp es AES-GCM( aes_key, otp_secret )
+  4) Cliente descifra enc_otp con aes_key y obtiene otp_secret (base32).
+  5) Posteriormente, todos los mensajes se envían cifrados con AES-GCM en
+     paquetes {'type':'enc','data': base64(nonce||ciphertext)}.
+
+Los 3 grandes bloques en este script:
+  - 1. Proceso RSA    => importar clave pública (PEM) y cifrar AES key con RSA-OAEP
+  - 2. Proceso AES    => funciones AES-GCM (encrypt/decrypt), manejo de nonce (12 bytes)
+  - 3. Proceso OTP    => recibir secreto base32 y generar TOTP (HMAC-SHA1 / ventanas de 30s)
+  
+===============================================================================
+*/
+
+(async ()=>{
+
+  // --- UI elements ---
+  const logEl = document.getElementById('log');
+  const statusEl = document.getElementById('status');
+  const otpDisplay = document.getElementById('otp_display');
+  const sendBtn = document.getElementById('send_btn');
+  const sendWithOtpBtn = document.getElementById('send_with_otp_btn');
+  const reqSecretBtn = document.getElementById('req_secret_btn');
+  const msgInput = document.getElementById('msg_input');
+  const manualOtpInput = document.getElementById('manual_otp');
+
+  // Simple logger para la interfaz (colorea ciertos mensajes para legibilidad)
+  function log(...a) {
+    const p = document.createElement('p');
+    p.style.margin = '2px 0';
+    const text = [...a].join(' ');
+
+    if (text.includes('[server][AUTH_FAIL]') || text.includes('[server error]') || text.includes('[!] Error')) {
+      p.style.color = '#ff6b6b';
+    } else if (text.includes('[server][PRIVILEGED]') || text.includes('[server][SECRET INFO]')) {
+      p.style.color = '#51cf66';
+    } else if (text.includes('[you]')) {
+      p.style.fontWeight = 'bold';
+      p.style.color = '#4facfe';
+    } else if (text.includes('Esperando respuesta')) {
+      p.style.color = '#ffd93d';
+    } else if (text.includes('[ws]')) {
+      p.style.color = '#a78bfa';
+    }
+
+    p.textContent = text;
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // -----------------------------
+  // /* 1. Proceso RSA
+  //
+  //    - Recibimos PEM del servidor: msg.type === 'rsa_pub'
+  //    - Convertimos PEM a ArrayBuffer (SPKI)
+  //    - Importamos la clave pública con WebCrypto (RSA-OAEP, SHA-256)
+  //    - Generamos una AES key (AES-GCM 128 bits) localmente con WebCrypto
+  //    - Exportamos la key raw y la ciframos con RSA-OAEP
+  //    - Enviamos el blob cifrado como base64 en {'type':'enc_aes', 'data': ...}
+  //
+  //    Funciones / util relacionadas: pemToArrayBuffer(), ab2b64(), b642ab()
+  // */
+  // -----------------------------
+
+  // Helpers para conversiones
+  function ab2b64(buf){
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    const chunk = 0x8000;
+    for (let i=0;i<bytes.length;i+=chunk){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk));
+    }
+    return btoa(binary);
+  }
+  function b642ab(b64){
+    const binary = atob(b64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for(let i=0;i<len;i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  // Convierte PEM (-----BEGIN PUBLIC KEY-----...) a ArrayBuffer (spki)
+  function pemToArrayBuffer(pem){
+    const b64 = pem.replace(/-----[^-]+-----/g,'').replace(/\s+/g,'');
+    return b642ab(b64);
+  }
+
+  // -----------------------------
+  // /* 2. Proceso AES
+  //
+  //    - AES-GCM se usa tanto para:
+  //        * descifrar enc_otp (otp_secret enviado por el server)
+  //        * cifrar/descifrar mensajes posteriores (type: 'enc')
+  //    - Implementamos aesEncryptRaw/aesDecryptRaw con iv (nonce) de 12 bytes.
+  //    - Los datos enviados al servidor son base64(nonce||ciphertext).
+  //
+  //    Funciones: aesEncryptRaw(), aesDecryptRaw(), encryptAndSendPlain(), handleEncMessage()
+  // */
+  // -----------------------------
+
+  async function aesEncryptRaw(key, dataUint8){
+    // key: CryptoKey (AES-GCM), dataUint8: Uint8Array or ArrayBuffer
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, dataUint8);
+    const ivAndCt = new Uint8Array(iv.byteLength + ct.byteLength);
+    ivAndCt.set(iv, 0);
+    ivAndCt.set(new Uint8Array(ct), iv.byteLength);
+    return ivAndCt.buffer;
+  }
+  async function aesDecryptRaw(key, ivAndCtBuffer){
+    const ivAndCt = new Uint8Array(ivAndCtBuffer);
+    const iv = ivAndCt.slice(0,12);
+    const ct = ivAndCt.slice(12);
+    const plain = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct);
+    return new Uint8Array(plain);
+  }
+
+  // -----------------------------
+  // /* 3. Proceso OTP (TOTP-like)
+  //
+  //    - Recibimos el secret en base32 del servidor (otp_secret).
+  //    - La función totpFromSecret() implementa el algoritmo HOTP/TOTP:
+  //       * base32 -> bytes
+  //       * counter = floor(now / 30)
+  //       * HMAC-SHA1(counter), truncamiento dinámico, 6 dígitos
+  //    - startTotpLoop() actualiza la UI cada segundo y muestra el código actual.
+  // */
+  // -----------------------------
+
+  function base32Decode(s){
+    s = s.replace(/=+$/,'').toUpperCase();
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = 0, value = 0;
+    const out = [];
+    for (let ch of s) {
+      value = (value << 5) | alphabet.indexOf(ch);
+      bits += 5;
+      if (bits >= 8) {
+        out.push((value >>> (bits - 8)) & 0xFF);
+        bits -= 8;
+      }
+    }
+    return new Uint8Array(out);
+  }
+
+  async function totpFromSecret(base32Secret){
+    // base32Secret -> key bytes
+    const keyBytes = base32Decode(base32Secret);
+    const now = Math.floor(Date.now()/1000);
+    const step = 30;
+    const counter = Math.floor(now / step);
+
+    // counter a 8 bytes big-endian
+    const counterBuf = new ArrayBuffer(8);
+    const view = new DataView(counterBuf);
+    view.setUint32(4, counter & 0xFFFFFFFF, false);
+    view.setUint32(0, Math.floor(counter / 2**32), false);
+
+    // HMAC-SHA1
+    const cryptoKey = await crypto.subtle.importKey("raw", keyBytes.buffer, {name:"HMAC", hash:"SHA-1"}, false, ["sign"]);
+    const sig = await crypto.subtle.sign("HMAC", cryptoKey, counterBuf);
+    const hs = new Uint8Array(sig);
+    const offset = hs[hs.length - 1] & 0x0f;
+    const code = ((hs[offset] & 0x7f) << 24) | ((hs[offset+1] & 0xff) << 16) | ((hs[offset+2] & 0xff) << 8) | (hs[offset+3] & 0xff);
+    const digits = 6;
+    const otp = (code % (10**digits)).toString().padStart(digits,'0');
+    return otp;
+  }
+
+  // -----------------------------
+  // Estado y manejo WebSocket
+  // -----------------------------
+  const ws = new WebSocket("ws://localhost:5000");
+  ws.onopen = ()=>{ 
+    statusEl.textContent = 'Conectado manito';
+    statusEl.className = 'status-badge status-connected';
+    log("[ws] connected"); 
+  };
+  ws.onclose = ()=>{ 
+    statusEl.textContent = 'Aquí no hay nah';
+    statusEl.className = 'status-badge status-disconnected';
+    log("[ws] closed"); 
+  };
+  ws.onerror = (e)=>{ log("[ws] error", e); };
+
+  // Estado criptográfico
+  let aesKey = null;         // CryptoKey AES-GCM
+  let otp_secret = null;     // string base32 recibido del server
+  let currentOtp = null;     // código TOTP actual (string)
+  let totpTimer = null;
+
+  // Manejo de mensajes entrantes "enc" (cifrados con AES-GCM)
+  async function handleEncMessage(b64){
+    try {
+      const ab = b642ab(b64);
+      const plainArr = await aesDecryptRaw(aesKey, ab);
+      const s = new TextDecoder().decode(plainArr);
+      const obj = JSON.parse(s);
+      return obj;
+    } catch(e){
+      log("[!] Error al descifrar/parsear:", e);
+      return null;
+    }
+  }
+
+  async function encryptAndSendPlain(obj){
+    const plain = new TextEncoder().encode(JSON.stringify(obj));
+    const ivct = await aesEncryptRaw(aesKey, plain);
+    const b64 = ab2b64(ivct);
+    ws.send(JSON.stringify({type:"enc", data: b64}));
+  }
+
+  // Manejo del flujo de control del socket (mensajes no enc / control)
+  ws.onmessage = async (evt) => {
+    try {
+      const raw = evt.data;
+      const msg = JSON.parse(raw);
+
+      // ---- Paso RSA: recibido PEM del servidor ----
+      if (msg.type === "rsa_pub") {
+        const pem = msg.pem;
+        log("[ws] Received RSA public (PEM)");
+
+        // Convertir PEM a ArrayBuffer (SPKI) e importar a WebCrypto
+        const spki = pemToArrayBuffer(pem);
+        const pubKey = await crypto.subtle.importKey("spki", spki, {name:"RSA-OAEP", hash:"SHA-256"}, false, ["encrypt"]);
+
+        // Generar AES key local (AES-GCM 128 bits)
+        aesKey = await crypto.subtle.generateKey({name:"AES-GCM", length:128}, true, ["encrypt","decrypt"]);
+        const rawKey = await crypto.subtle.exportKey("raw", aesKey);
+
+        // Cifrar AES key con la public key RSA del servidor y enviar
+        const enc = await crypto.subtle.encrypt({name:"RSA-OAEP"}, pubKey, rawKey);
+        const b64 = ab2b64(enc);
+        ws.send(JSON.stringify({type:"enc_aes", data: b64}));
+        log("[ws] Enviado AES key cifrada con RSA");
+
+      // ---- Paso AES: recibir enc_otp (AES-GCM) ----
+      } else if (msg.type === "enc_otp") {
+        const b64 = msg.data;
+        const ab = b642ab(b64);
+        const plainArr = await aesDecryptRaw(aesKey, ab);
+        otp_secret = new TextDecoder().decode(plainArr);
+        log("[ws] OTP secret recibido y descifrado (base32): " + otp_secret);
+        startTotpLoop();
+
+      // ---- Mensajes cifrados posteriores ----
+      } else if (msg.type === "enc") {
+        const obj = await handleEncMessage(msg.data);
+        if (!obj) return;
+
+        if (obj.action === "message_reply"){
+          if (obj.privileged){
+            log("[server][PRIVILEGED] ", obj.text, " | secret:", obj.secret || '');
+          } else {
+            log("[server] ", obj.text);
+          }
+        } else if (obj.action === "secret_info"){
+          log("[server][SECRET INFO] ", obj.secret, obj.note || '');
+        } else if (obj.action === "auth_fail"){
+          log("[server][AUTH_FAIL] ", obj.msg);
+        } else {
+          log("[server] objeto: ", obj);
+        }
+
+      // ---- Mensajes de control/errores ----
+      } else if (msg.type === "error"){
+        log("[server error]", msg.msg);
+      } else {
+        log("[ws] unknown control message", msg);
+      }
+    } catch (e) {
+      log("[!] Error processing message:", e, evt.data);
+    }
+  };
+
+  // Inicia el loop que calcula TOTP y actualiza la UI (cada 1s)
+  function startTotpLoop(){
+    if (!otp_secret) return;
+    if (totpTimer) clearInterval(totpTimer);
+    
+    const circle = document.querySelector('.otp-progress');
+    const circumference = 2 * Math.PI * 64;
+    circle.style.strokeDasharray = circumference;
+    
+    async function tick(){
+      try {
+        const otp = await totpFromSecret(otp_secret);
+        currentOtp = otp;
+        const secsLeft = 30 - (Math.floor(Date.now()/1000) % 30);
+        
+        otpDisplay.textContent = otp;
+        document.getElementById('otp_seconds').textContent = secsLeft + 's';
+        
+        const progress = secsLeft / 30;
+        const offset = circumference * (1 - progress);
+        circle.style.strokeDashoffset = offset;
+        
+        if (secsLeft <= 5) {
+          circle.style.stroke = '#ff6b6b';
+        } else if (secsLeft <= 10) {
+          circle.style.stroke = '#ffd93d';
+        } else {
+          circle.style.stroke = '#667eea';
+        }
+      } catch(e){ console.error(e); }
+    }
+    tick();
+    totpTimer = setInterval(tick, 1000);
+  }
+
+  // ---- UI botones: enviar mensajes ----
+  sendBtn.onclick = async () => {
+    if (!aesKey) { log("No AES key yet"); return; }
+    const text = msgInput.value || "hola desde cliente";
+    await encryptAndSendPlain({action:"message", text});
+    log(`[you] Enviado mensaje normal: "${text}"`);
+  };
+
+  sendWithOtpBtn.onclick = async () => {
+    if (!aesKey) { log("No AES key yet"); return; }
+    const text = msgInput.value || "mensaje con otp";
+    const otpManual = manualOtpInput.value.trim();
+    await encryptAndSendPlain({action:"message", text, otp: otpManual});
+    log(`[you] Enviado mensaje con OTP: "${text}" otp="${otpManual}" — Esperando respuesta del servidor...`);
+  };
+
+  reqSecretBtn.onclick = async () => {
+    if (!aesKey) { log("No AES key yet"); return; }
+    const otpManual = manualOtpInput.value.trim();
+    await encryptAndSendPlain({action:"request_secret", otp: otpManual});
+    log(`[you] Solicitaste información privada con otp="${otpManual}" — Esperando respuesta del servidor...`);
+  };
+
+})();
+</script>
+</body>
+</html>
